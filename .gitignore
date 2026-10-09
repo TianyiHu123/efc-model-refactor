@@ -1,0 +1,21 @@
+# --- Python caches ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- Large model artifacts (tracked as external assets, NOT in git) ---
+# The 8 bootstrap bundles are ~250 MB each (~2 GB total). Keep the manifest
+# (small JSON) under version control but ignore the binary joblib files.
+model_artifacts/**/*.joblib
+
+# --- Generated pipeline outputs (reproducible; not source) ---
+model_inputs/*/
+model_predictions/
+
+# --- ELM postprocessed inputs (large, live in elm-olmt) ---
+*.pkl
+
+# --- Editor / OS cruft ---
+.DS_Store
+*.swp

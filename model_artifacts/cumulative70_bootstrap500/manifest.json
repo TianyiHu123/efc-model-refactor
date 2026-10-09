@@ -1,0 +1,154 @@
+{
+  "format_version": 1,
+  "created_by": "fit_save_cumulative70_bootstrap_models.py",
+  "training_source": "/Users/yangsong/condex-work/AOGS_EFC/Submission3_ISME_Verson/enzyme_meta_data_with_hydrothermal_11.csv",
+  "training_sha256": "a49cb9e5f146eab29ceb2e304c0a87700eb2e3cd5b32292ac6e298e1aa6a23ce",
+  "feature_source": "/Users/yangsong/condex-work/AOGS_EFC/Submission3_ISME_Verson/analysis_outputs/importance_robustness/results/selected15_cumulative70_features.json",
+  "feature_sha256": "95cf77817a76e38cde4c89faa8816b092c5c87a1dd63854043d38fea585d28d5",
+  "training_rows": 575,
+  "outcomes": [
+    "Carbohydrate",
+    "Lignin",
+    "Organic N",
+    "MonomerN",
+    "Inorganic N",
+    "Organic P",
+    "Monomer P",
+    "Inorganic P"
+  ],
+  "bootstrap_models_per_outcome": 500,
+  "total_models": 4000,
+  "base_seed": 20260822,
+  "rf_parameters": {
+    "n_estimators": 150,
+    "criterion": "squared_error",
+    "max_depth": 10,
+    "max_features": 1.0,
+    "max_samples": 0.4,
+    "bootstrap": true,
+    "n_jobs": 1
+  },
+  "runtime": {
+    "python": "3.11.15",
+    "numpy": "2.4.6",
+    "pandas": "3.0.5",
+    "scikit_learn": "1.9.0",
+    "joblib": "1.5.3"
+  },
+  "bundles": [
+    {
+      "outcome": "Carbohydrate",
+      "features": [
+        "soil c (%)",
+        "SM_A_Y_esm",
+        "NPP_daily"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_carbohydrate_bootstrap500.joblib",
+      "bytes": 262701808,
+      "sha256": "2a74d7cb82475948c67e9c0bf1dc5668bd8e9bfe412ee2b178671cdd31d14640",
+      "models": 500
+    },
+    {
+      "outcome": "Lignin",
+      "features": [
+        "SM_theta_res_Y_esm",
+        "A_Y_T",
+        "c/n",
+        "SM_tau_Y_esm",
+        "soil c (%)"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_lignin_bootstrap500.joblib",
+      "bytes": 255016740,
+      "sha256": "e154c6e07fd9b4184269dfc61b590e22cf7f98a572af0710a9bd919721024df3",
+      "models": 500
+    },
+    {
+      "outcome": "Organic N",
+      "features": [
+        "ST",
+        "clay",
+        "soil c (%)",
+        "SM_theta_res_M_esm",
+        "SM_theta_res_W_esm"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_organic_n_bootstrap500.joblib",
+      "bytes": 301728103,
+      "sha256": "1bcf3427ba632876fb1330767983d164c2fb93f5cf9137ef3c9caac30182b4e5",
+      "models": 500
+    },
+    {
+      "outcome": "MonomerN",
+      "features": [
+        "A_Y_T",
+        "SM",
+        "SM_theta_res_M_esm",
+        "SM_theta_res_Y_esm",
+        "NPP_daily",
+        "c/n",
+        "soil c (%)"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_monomern_bootstrap500.joblib",
+      "bytes": 300056263,
+      "sha256": "3b0bf895734c23ffba55d31d87ef6547f4deabf58b589046161fcc573d4d9880",
+      "models": 500
+    },
+    {
+      "outcome": "Inorganic N",
+      "features": [
+        "soil c (%)",
+        "A_Y_T",
+        "SM_A_Y_esm",
+        "c/n",
+        "SM",
+        "SM_tau_Y_esm",
+        "clay"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_inorganic_n_bootstrap500.joblib",
+      "bytes": 290726620,
+      "sha256": "549e181b6d757c41c8276ce02e0a891f216fd3c659e33909afedf9426c8b4582",
+      "models": 500
+    },
+    {
+      "outcome": "Organic P",
+      "features": [
+        "SM_theta_res_Y_esm",
+        "sand",
+        "c/n",
+        "NPP_daily",
+        "soil c (%)"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_organic_p_bootstrap500.joblib",
+      "bytes": 274591719,
+      "sha256": "2b34678faca6db6f6b9fc9febbb0f8d6613b462918bb7a0af18f5b687adb98be",
+      "models": 500
+    },
+    {
+      "outcome": "Monomer P",
+      "features": [
+        "A_Y_T",
+        "SM_tau_W_esm",
+        "clay",
+        "c/n",
+        "soil c (%)"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_monomer_p_bootstrap500.joblib",
+      "bytes": 275761396,
+      "sha256": "becdcedb1fcd22a354e94a682b23c744fba63cf30ba7cabab8dca978aeb4afd3",
+      "models": 500
+    },
+    {
+      "outcome": "Inorganic P",
+      "features": [
+        "c/n",
+        "sand",
+        "CV_Y_T",
+        "soil c (%)",
+        "SM_tau_Y_esm"
+      ],
+      "path": "/Users/yangsong/condex-work/AOGS_EFC/model_artifacts/cumulative70_bootstrap500/cumulative70_inorganic_p_bootstrap500.joblib",
+      "bytes": 161861312,
+      "sha256": "2d0c4ca2ea03f57de9ae780b48511484cf41704cac2ad7e68d5bbc62f2018232",
+      "models": 500
+    }
+  ]
+}
