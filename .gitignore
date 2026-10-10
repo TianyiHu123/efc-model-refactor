@@ -10,6 +10,7 @@ __pycache__/
 model_artifacts/**/*.joblib
 
 # --- Generated pipeline outputs (reproducible; not source) ---
+outputs/
 model_inputs/*/
 model_predictions/
 
