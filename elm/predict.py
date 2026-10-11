@@ -35,8 +35,14 @@ def predict_case(
     site: str,
     compset: str,
     keep_bootstraps: bool = False,
+    n_jobs: int = 1,
 ) -> str:
-    """Run all 8 bundles over the feature table; write a per-case NetCDF."""
+    """Run all 8 bundles over the feature table; write a per-case NetCDF.
+
+    ``n_jobs`` sets the number of threads each RandomForest uses for
+    ``.predict`` (overridden at runtime on the loaded estimators). This does
+    not change predictions, only parallelizes tree evaluation across cores.
+    """
     model_dir = Path(model_dir)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -66,6 +72,14 @@ def predict_case(
         feats = bundle["features"]
         models = bundle["models"]
         n_boot = len(models)
+        if n_jobs != 1:
+            # Runtime override; does not alter predictions, only parallelizes
+            # tree evaluation across cores.
+            for m in models:
+                try:
+                    m.n_jobs = n_jobs
+                except AttributeError:
+                    pass
 
         stat_arrays = {s: np.full((n_time, n_layer), np.nan) for s in SUMMARY_STATS}
         boot_array = (

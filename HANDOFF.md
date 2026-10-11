@@ -69,3 +69,19 @@ Verdict was NEEDS_CHANGES; the two MAJOR items and four MINORs were fixed:
   catch any case whose time epoch ≠ `trans_startyear` or with partial days).
 - Optional: a small unit-test suite (config parsing, noleap dates, drydown
   equality vs clm_ref) to lock the contract.
+
+## Parallelization & Slurm (added 2026-10-11)
+
+- `run_efc.py --jobs N` sets the RandomForest thread count for Stage-2 predict
+  (runtime `n_jobs` override on loaded estimators). Verified numerically
+  equivalent to serial (max abs diff 3.5e-18 ≈ 1 float64 ULP, from parallel
+  mean-summation order). Default 1.
+- Timing (ABBY): Stage 1 ~1.4 min / 0.1 GB; full run ~19 min / 2.5 GB, Stage 2
+  dominates. On the 2-core login node `--jobs 2` was *slower* (oversubscription)
+  — real speedup needs dedicated compute cores → use Slurm.
+- `slurm/run_efc_single_case.slurm`: example Perlmutter single-case job
+  (`--qos=shared --account=m4803 --constraint=cpu --cpus-per-task=32`,
+  `--mode operational --jobs=$SLURM_CPUS_PER_TASK`). Validated with `bash -n`
+  and path checks; **not submitted** (operational action for the user). The
+  end-to-end Slurm run itself is therefore unverified.
+- One case per job; job array for many sites is a future addition.

@@ -73,7 +73,8 @@ run_efc.py --site ABBY \
            --compset I20TRCNPRDCTCBC \   # placeholder; reserved for later use
            --mode test \                 # test | operational  (see §6)
            --use-vertsoilc true \        # default true (see §5)
-           --stage all                   # inputs | predict | all
+           --stage all \                 # inputs | predict | all
+           --jobs 32                     # RandomForest threads for Stage-2 predict
 ```
 
 - `--run-dir` is **explicit** (the compset suffix in the folder name is not
@@ -162,6 +163,31 @@ This rule is also recorded in `AGENTS.md` for agent sessions.
 
 ---
 
+## 6b. Compute & Slurm (operational runs)
+
+**Operational runs go through Slurm, not the login node.** Stage 2 (prediction)
+is CPU-bound: on the verified ABBY case it is ~17.5 of the ~19 min total wall
+time (8 outcomes × 500-tree ensembles × 15 layers × 2190 days). Stage 1 is
+~1.4 min / ~0.1 GB; the full run peaks at ~2.5 GB RAM.
+
+- **`--jobs N`** sets the RandomForest thread count for Stage-2 predict (a
+  runtime `n_jobs` override on the loaded estimators). It is numerically
+  equivalent to the serial result — verified max abs diff 3.5e-18 (~1 float64
+  ULP), from parallel mean-summation order only — and gives near-linear speedup
+  on dedicated cores. Match `--jobs` to the cores Slurm allocates.
+- Example single-case submission script:
+  [`slurm/run_efc_single_case.slurm`](slurm/run_efc_single_case.slurm) —
+  Perlmutter CPU, `--qos=shared`, `--account=m4803`, `--cpus-per-task=32`,
+  `--mode operational`, `--jobs=$SLURM_CPUS_PER_TASK`. Case is overridable via
+  `SITE` / `CASE_NAME` / `CONFIG` / `RUN_DIR` environment variables.
+- One case per job. For many sites, wrap this in a Slurm **job array** (not
+  included yet).
+
+> Note: do not benchmark `--jobs > 1` on a login node — the shared 2-core login
+> node oversubscribes and runs *slower*; real speedup requires compute cores.
+
+---
+
 ## 7. Other data sources
 
 | Input | Source | Notes |
@@ -211,6 +237,7 @@ efc-model-refactor/
     io.py config.py surface.py features.py build.py predict.py paths.py
   predict_with_saved_cumulative70_models.py   # existing Stage-2 (to be wrapped)
   model_artifacts/             # 8 bundles (git-ignored) + manifest.json (tracked)
+  slurm/                       # example Slurm submission scripts (single case)
   clm_ref/                     # frozen CLM reference (do not edit)
   AGENTS.md                    # agent operating rules (run-location policy, env)
   HANDOFF.md                   # current state + decisions for session handoff

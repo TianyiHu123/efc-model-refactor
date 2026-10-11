@@ -66,6 +66,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--stage", choices=("inputs", "predict", "all"), default="all")
     p.add_argument("--keep-bootstraps", action="store_true",
                    help="retain full 500-member bootstrap dimension in the NetCDF")
+    p.add_argument("--jobs", type=int, default=1,
+                   help="threads per RandomForest for Stage-2 predict (parallelism); "
+                        "use the number of allocated cores on a compute node")
     p.add_argument("--no-csv", action="store_true", help="skip CSV copy of the table")
     return p.parse_args(argv)
 
@@ -117,7 +120,7 @@ def main(argv=None) -> int:
     # --- Stage 2: predict ---
     nc_path = _predict.predict_case(
         master, MODEL_DIR, out_dir, args.case_name, cfg.site, args.compset,
-        keep_bootstraps=args.keep_bootstraps,
+        keep_bootstraps=args.keep_bootstraps, n_jobs=args.jobs,
     )
     print(f"[info] wrote predictions: {nc_path}")
     print("[done] stage=all" if args.stage == "all" else "[done] stage=predict")
