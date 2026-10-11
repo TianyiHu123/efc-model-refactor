@@ -10,7 +10,10 @@ __pycache__/
 model_artifacts/**/*.joblib
 
 # --- Generated pipeline outputs (reproducible; not source) ---
-outputs/
+# Real outputs go to /pscratch/.../efc-prediction, never the repo.
+# Keep the outputs/ placeholder README but ignore any real content.
+outputs/*
+!outputs/README.md
 model_inputs/*/
 model_predictions/
 
