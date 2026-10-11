@@ -4,54 +4,68 @@ _Last updated: 2026-10-11_
 
 ## Where we are
 
-Planning is **finalized**. Next concrete step: **scaffold the `elm/` engine and
-root caller `run_efc.py`, then run a smoke test** against the ABBY verified case.
-No engine code exists yet.
+The ELM EFC engine is **built, independently reviewed, and smoke-tested** on the
+ABBY `ctrlvertsoc` case. End-to-end run (Stage 1 + Stage 2) succeeds and all
+output checks pass. Review findings addressed. Ready for broader use (more
+sites/cases) and any follow-on work.
 
-## Verified reference case (use for the smoke test)
+## What exists
 
-- Site: `ABBY`; case name: `ABBY_ctrlvertsoc`; compset: `I20TRCNPRDCTCBC`.
-- Config: `/pscratch/sd/t/tianyihu/E3SM_out/SOIL_project/NEON_ctrl/ctrlvertsoc/ABBY/config/ABBY_ctrlvertsoc.cfg`
-  - `use_vertsoilc = .true.`, `trans_startyear = 2018`, `nyears_trans = 7`,
-    `surffile = /pscratch/.../CTSM_NEON/ABBY/surfdata_1x1_NEON_ABBY_hist_2000_c260408.nc`.
-- Run dir: `/pscratch/sd/t/tianyihu/E3SM_out/SOIL_project/NEON_ctrl/ctrlvertsoc/ABBY/ABBY_ctrlvertsoc_I20TRCNPRDCTCBC/run`
-  - `H2OSOI.nc` `(time=61320, levgrnd=15, lndgrid=1)` units `mm3/mm3`
-  - `TSOI.nc`   `(time=61320, levgrnd=15, lndgrid=1)` units `K`
-  - `NPP.nc`    `(time=61320, lndgrid=1)` units `gC/m^2/s`
-  - `time`: hourly, in days (step 1/24); `levgrnd` depths in meters from coord.
-- NEON csv: `/pscratch/sd/t/tianyihu/CTSM_Hu/neon_surffiles/ABBY_surfaceData.csv`.
+- `run_efc.py` — root caller (CLI). Args: `--site --case-name --config
+  --run-dir --neon-csv-root --output-root --compset(placeholder, default
+  I20TRCNPRDCTCBC) --mode{test|operational} --use-vertsoilc(default true)
+  --stage{inputs|predict|all} --keep-bootstraps --no-csv`.
+- `elm/` engine:
+  - `config.py` — tolerant `.cfg` parser (inline comments, quotes, Fortran bools).
+  - `paths.py` — `{root}/{site}/{case}/{mode}/attempt{N}` resolver (auto next-N).
+  - `io.py` — reads run-dir `H2OSOI.nc/TSOI.nc/NPP.nc`, hourly→daily (noleap),
+    depths from `levgrnd`. Validates time epoch==start_year, noleap calendar,
+    and a complete contiguous 24/day grid. Loud single-layer guard.
+  - `surface.py` — texture from surfdata (`nlevsoi`→`levgrnd` with deepest
+    carried forward); C/N from NEON csv by depth horizon; reports below-horizon
+    layer count.
+  - `features.py` — trailing W/M/Y drydown + temperature metrics; a faithful,
+    verified-identical port of `clm_ref`.
+  - `build.py` — Stage-1 consolidated long-form table (Parquet + optional CSV) +
+    provenance JSON.
+  - `predict.py` — applies the 8 bootstrap bundles → per-case NetCDF
+    `(time, soil_layer)`, 5 summary stats (+ optional bootstrap dim).
 
-## Settled decisions
+## Verified smoke test (ABBY ctrlvertsoc)
 
-1. **Data source = run-folder `.nc`** (NOT pkl). Pkl collapses to top layer only.
-2. **All `levgrnd` layers** (15 here). Depths read from the file coordinate.
-3. **Hourly → daily means**; `TSOI` K→°C; `NPP_daily` daily-mean gC/m^2/s.
-4. **CLI (one case per run):** `--site --case-name --config --run-dir`
-   (explicit) `--compset` (placeholder, default `I20TRCNPRDCTCBC`)
-   `--neon-csv-root --output-root --mode {test|operational} --use-vertsoilc`
-   (default true) `--stage {inputs|predict|all}`.
-5. **Outputs:** Stage-1 consolidated long-form table (Parquet + optional CSV);
-   Stage-2 per-case NetCDF (dims `(time, soil_layer)`, 5 summary stats, optional
-   bootstrap dim).
-6. **Output location policy:** always ask user; default
-   `/pscratch/sd/t/tianyihu/efc-prediction`; layout
-   `{root}/{site}/{case-name}/{test|operational}/attempt{N}/`; engine creates
-   dirs + picks next free attempt; never write inside repo. (See AGENTS.md.)
-7. **Feature engineering** ported from `clm_ref/efc_workflow.py`
-   (`_drydown_metrics`) + temperature metrics into `elm/features.py`; no legacy
-   dependency.
-8. **Stage-2 contract fixed** by `model_artifacts/.../manifest.json` (8 outcomes,
-   per-outcome feature lists) and `predict_with_saved_cumulative70_models.py`.
+Output: `/pscratch/sd/t/tianyihu/efc-prediction/ABBY/ABBY_ctrlvertsoc/test/attempt{1,2}/`
+- Stage-1 table: 32850 rows = 15 layers × 2190 days, coverage 2019-01-01→2024-12-31
+  (365-day warmup consumes 2018; source 2018–2024).
+- NetCDF: dims `(time=2190, soil_layer=15)`, 40 vars (8 outcomes × 5 stats),
+  all finite; coords `time/soil_layer/soil_node_depth_cm`; provenance attrs.
+- Provenance: `texture_native_nlevsoi=10`, `texture_extended_to_levgrnd=True`,
+  `cn_below_deepest_horizon_layers=6`.
+- All modules `py_compile` clean.
 
-## Open / to confirm at build time
+## Independent review (sub-agent) — resolved
 
-- Exact mapping of `taxis`/`time` (days) → calendar `Date` (no-leap).
-- First smoke test must assert: 15 layers, 2018–2024 coverage, units match,
-  no NaNs in model features after 365-day warmup, successful NetCDF write.
+Verdict was NEEDS_CHANGES; the two MAJOR items and four MINORs were fixed:
+- **M1** (dates were synthesized from cfg): `io._parse_time_reference` now reads
+  the file's `units`/`calendar`, asserts noleap, Jan-1 epoch, and epoch
+  year == `trans_startyear`.
+- **M2** (no completeness check): `io._validate_daily_grid` asserts day index
+  starts at 0, is contiguous, and has a uniform 24 samples/day.
+- m1 case-name mismatch warning; m2 explicit gridcell/level axis in
+  `read_texture`; m3 below-horizon C/N count in provenance; m4 fail loudly if no
+  table is written.
+- Confirmed by reviewer: `features.py` numerically identical to `clm_ref`;
+  Stage-2 summary stats match the reference.
 
-## Next step
+## Conventions (unchanged; see AGENTS.md)
 
-Scaffold `elm/{io,config,surface,features,build,predict,paths}.py` + `run_efc.py`,
-then smoke-test on ABBY (output to
-`/pscratch/sd/t/tianyihu/efc-prediction/ABBY/ABBY_ctrlvertsoc/test/attempt1/`).
-Retry budget 3; if exhausted, ask the user.
+- Interpreter: `/global/common/software/m4803/conda/envs/OLMT_pm_TianyiPY311/bin/python`.
+- Output policy: ask user; default `/pscratch/sd/t/tianyihu/efc-prediction`;
+  `{site}/{case}/{test|operational}/attempt{N}`; never write in repo.
+- One case per invocation; `--compset` is a placeholder for future multi-case.
+
+## Possible next steps
+
+- Run additional NEON sites/cases (watch the new loud validations — they will
+  catch any case whose time epoch ≠ `trans_startyear` or with partial days).
+- Optional: a small unit-test suite (config parsing, noleap dates, drydown
+  equality vs clm_ref) to lock the contract.
