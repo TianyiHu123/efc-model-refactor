@@ -85,3 +85,29 @@ Verdict was NEEDS_CHANGES; the two MAJOR items and four MINORs were fixed:
   and path checks; **not submitted** (operational action for the user). The
   end-to-end Slurm run itself is therefore unverified.
 - One case per job; job array for many sites is a future addition.
+
+## Operational run convention (added 2026-10-11)
+
+- **Script + Slurm logs live in the attempt output folder**, co-located with the
+  scientific outputs: `{root}/{site}/{case}/{test|operational}/attempt{N}/`.
+  Pre-create the attempt dir, put the `.slurm` script there, submit from there
+  (so `#SBATCH --output/--error` land there), and pass that dir to the engine.
+- `run_efc.py --output-dir DIR` (new) overrides the auto-selected attempt so the
+  engine writes into the pre-created folder. Verified working (stage inputs
+  wrote to an explicit dir). Default behavior (auto attempt{N}) unchanged when
+  `--output-dir` is omitted.
+- Repo `slurm/run_efc_single_case.slurm` updated to this pattern (submit from the
+  attempt dir; `OUTPUT_DIR=$SLURM_SUBMIT_DIR`). AGENTS.md §1 and README §6 updated.
+- Retry-budget rule: ask the user each new task; default 3.
+
+## In-flight operational job (ABBY_ctrlvertsoc)
+
+- Attempt dir: `/pscratch/sd/t/tianyihu/efc-prediction/ABBY/ABBY_ctrlvertsoc/operational/attempt1/`
+  (contains `run_efc_ABBY_ctrlvertsoc.slurm`, `.jobid`).
+- First submission 59688781 was CANCELLED (still PENDING, 0 compute) to adopt the
+  attempt-folder convention; resubmitted as **59691362**.
+- Status at last check: PENDING, reason progressed Priority→Licenses→Resources
+  (normal `shared`-partition queue wait, not a failure; no retry budget consumed).
+- Remaining: monitor to terminal, then `seff`/`sacct` efficiency review +
+  resource-allocation recommendation + update example script walltime/cpus; then
+  audit outputs (NetCDF dims/finite, feature rows, provenance).

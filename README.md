@@ -156,6 +156,10 @@ Layout (the engine creates these directories and selects the next free attempt):
 
 - `test/` and `operational/` outputs are kept **separate**.
 - Each retry (test or operational) goes to its own `attemptN/` subfolder.
+- The `.slurm` script and the Slurm `--output/--error` logs live **in the same
+  `attemptN/` folder** as the scientific outputs (pre-create the attempt dir,
+  submit from there, pass it to the engine via `--output-dir`). The repo
+  `slurm/` holds examples only.
 - Outputs are **never** written inside the git repo; the repo `outputs/` path is a
   git-ignored placeholder only.
 

@@ -18,6 +18,16 @@ Durable conventions for any agent working in this repository. Read this first.
   - Each run/retry goes to its own `attempt{N}/` (both test AND operational).
   - The engine creates the directories and selects the next free `attempt{N}`.
 
+- **Slurm script + logs live in the attempt output folder** (not the case root,
+  not the repo). For a Slurm run, pre-create the attempt dir, place the
+  case-specific `.slurm` script there, point `#SBATCH --output/--error` there,
+  and run the engine against that same attempt dir. This keeps the exact script,
+  scheduler logs, and scientific outputs for one attempt co-located and
+  self-describing. The repo `slurm/` holds **examples only**.
+  - Because the engine normally auto-selects `attempt{N}`, a Slurm run passes the
+    pre-created attempt dir explicitly (via `--output-dir`) so the script, logs,
+    and outputs all land in the same folder.
+
 ## 2. Testing policy
 
 - New engine work is validated with a **smoke test** first.

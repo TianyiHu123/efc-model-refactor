@@ -59,6 +59,11 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help="case run directory containing H2OSOI.nc/TSOI.nc/NPP.nc")
     p.add_argument("--neon-csv-root", required=True, type=Path)
     p.add_argument("--output-root", type=Path, default=Path(DEFAULT_OUTPUT_ROOT))
+    p.add_argument("--output-dir", type=Path, default=None,
+                   help="explicit output dir (e.g. a pre-created attempt folder); "
+                        "when set, overrides the auto-selected attempt under "
+                        "--output-root. Used by Slurm runs so script/logs/outputs "
+                        "co-locate in one attempt folder.")
     p.add_argument("--compset", default="I20TRCNPRDCTCBC",
                    help="placeholder; reserved for later multi-case use")
     p.add_argument("--mode", choices=VALID_MODES, default="test")
@@ -88,7 +93,11 @@ def main(argv=None) -> int:
         print(f"[warn] --use-vertsoilc {args.use_vertsoilc} != cfg {cfg.use_vertsoilc}; "
               f"using cfg value {cfg.use_vertsoilc}.", file=sys.stderr)
 
-    out_dir = next_attempt_dir(args.output_root, cfg.site, args.case_name, args.mode)
+    if args.output_dir is not None:
+        out_dir = args.output_dir.expanduser().resolve()
+        out_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        out_dir = next_attempt_dir(args.output_root, cfg.site, args.case_name, args.mode)
     print(f"[info] output dir: {out_dir}")
 
     neon_csv = args.neon_csv_root / f"{cfg.site}_surfaceData.csv"
