@@ -86,6 +86,38 @@ Verdict was NEEDS_CHANGES; the two MAJOR items and four MINORs were fixed:
   end-to-end Slurm run itself is therefore unverified.
 - One case per job; job array for many sites is a future addition.
 
+## First operational run — ABBY_ctrlvertsoc (2026-10-12)
+
+- **Succeeded on attempt 2.** Outputs in
+  `/pscratch/sd/t/tianyihu/efc-prediction/ABBY/ABBY_ctrlvertsoc/operational/attempt2/`
+  (NetCDF 2190×15, 40 vars all finite; features Parquet/CSV identical to
+  attempt1; provenance; Slurm script + logs co-located).
+- **Attempt 1 (job 59702073): TIMEOUT** at 30 min, `seff` CPU eff 3.76%. Root
+  cause: Stage-2 set `RandomForestRegressor.n_jobs=N` per model, which *slows*
+  the 500 tiny-input predicts (verified n_jobs=16 was 2× slower than serial).
+- **Fix (committed):** `elm/predict.py` now forces each model `n_jobs=1` and
+  parallelizes ACROSS the 500 bootstrap members with
+  `Parallel(n_jobs, prefer="threads")`. Numerically EXACT vs serial
+  (max abs diff 0.00e+00, allclose). Added BLAS/OpenMP=1 env pinning in the
+  Slurm script to prevent nested oversubscription.
+- **Attempt 2 (job 59704245): COMPLETED**, wall 19:03, 8 cores, `seff` 8.59%,
+  mem 4.63 GB/16 GB.
+
+### Efficiency finding + resource recommendation
+- Even with the fix, `/usr/bin/time` shows ~137% CPU (~1.4 cores avg) and wall
+  ≈ serial Stage-2 time. The thread-across-models parallelism barely engages —
+  scikit-learn RF `.predict` on tiny inputs holds the GIL enough to serialize.
+  **This is a performance limitation, not a correctness issue.**
+- **Recommended operational resources (now the example-script defaults):**
+  `--cpus-per-task=4` (2 physical cores), `--mem=8GB`, `--time=00:40:00`
+  (observed 19 min). Over-allocating cores wastes `shared` charge and worsens
+  backfill wait for no wall-time gain.
+- **Future optimization (not blocking):** for real speedup use process-based
+  parallelism across the 15 layers and/or 8 outcomes (loky backend), rather than
+  threads across 500 tiny predicts.
+- Queue reality on `shared`: waits ranged 1–6 h during this exercise;
+  `squeue --start` estimates were unreliable (withdrawn/overshot).
+
 ## Operational run convention (added 2026-10-11)
 
 - **Script + Slurm logs live in the attempt output folder**, co-located with the

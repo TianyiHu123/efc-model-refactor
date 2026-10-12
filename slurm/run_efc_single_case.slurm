@@ -22,14 +22,22 @@
 #SBATCH --qos=shared
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=48GB
-#SBATCH --time=00:30:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=8GB
+#SBATCH --time=00:40:00
 #SBATCH --job-name=efc_single
 #SBATCH --output=efc_%x_%j.out
 #SBATCH --error=efc_%x_%j.err
 
 set -euo pipefail
+
+# Avoid BLAS/OpenMP oversubscription (we parallelize across bootstrap models;
+# keep each numeric library single-threaded).
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export BLIS_NUM_THREADS=1
 
 # --- interpreter (OLMT Perlmutter env; has xarray/sklearn/joblib/...) --------
 readonly PYTHON=/global/common/software/m4803/conda/envs/OLMT_pm_TianyiPY311/bin/python
@@ -49,10 +57,12 @@ COMPSET="${COMPSET:-I20TRCNPRDCTCBC}"
 # here too. Pass it to the engine so scientific outputs co-locate.
 readonly OUTPUT_DIR="${OUTPUT_DIR:-$SLURM_SUBMIT_DIR}"
 
-# Match RandomForest threads to the cores Slurm gave us.
-readonly JOBS="${SLURM_CPUS_PER_TASK:-1}"
+# Slurm counts hyperthreads as "cpus"; Perlmutter CPU has 2 per physical core.
+# Align RandomForest threads to PHYSICAL cores (cpus-per-task=4 -> 2 cores).
+readonly HT="${SLURM_CPUS_PER_TASK:-2}"
+readonly JOBS=$(( HT / 2 > 0 ? HT / 2 : 1 ))
 
-echo "[slurm] job ${SLURM_JOB_ID:-<none>} on $(hostname); cpus-per-task=${JOBS}"
+echo "[slurm] job ${SLURM_JOB_ID:-<none>} on $(hostname); cpus(ht)=${HT} jobs(cores)=${JOBS}"
 echo "[slurm] site=${SITE} case=${CASE_NAME} output_dir=${OUTPUT_DIR}"
 
 cd "${REPO_ROOT}"

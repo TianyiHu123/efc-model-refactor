@@ -15,6 +15,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import xarray as xr
+from joblib import Parallel, delayed
 
 SUMMARY_STATS = ("mean", "median", "sd", "q025", "q975")
 
@@ -72,14 +73,15 @@ def predict_case(
         feats = bundle["features"]
         models = bundle["models"]
         n_boot = len(models)
-        if n_jobs != 1:
-            # Runtime override; does not alter predictions, only parallelizes
-            # tree evaluation across cores.
-            for m in models:
-                try:
-                    m.n_jobs = n_jobs
-                except AttributeError:
-                    pass
+        # Each estimator predicts single-threaded; parallelism is applied ACROSS
+        # the bootstrap members below (the right axis). Overriding each model's
+        # own n_jobs instead *slows* these many small predicts (verified), which
+        # is what caused the earlier timeout.
+        for m in models:
+            try:
+                m.n_jobs = 1
+            except AttributeError:
+                pass
 
         stat_arrays = {s: np.full((n_time, n_layer), np.nan) for s in SUMMARY_STATS}
         boot_array = (
@@ -99,7 +101,15 @@ def predict_case(
             if missing:
                 raise ValueError(f"{outcome}: feature table missing {missing}")
             X = lt[feats]
-            preds = np.column_stack([m.predict(X) for m in models])  # (n_time, n_boot)
+            if n_jobs and n_jobs > 1:
+                # Parallelize across the 500 bootstrap members (threads: RF
+                # predict releases the GIL; no data copy, numerically identical).
+                cols = Parallel(n_jobs=n_jobs, prefer="threads")(
+                    delayed(m.predict)(X) for m in models
+                )
+                preds = np.column_stack(cols)  # (n_time, n_boot)
+            else:
+                preds = np.column_stack([m.predict(X) for m in models])
             stat_arrays["mean"][:, li] = preds.mean(axis=1)
             stat_arrays["median"][:, li] = np.median(preds, axis=1)
             stat_arrays["sd"][:, li] = preds.std(axis=1, ddof=1)
