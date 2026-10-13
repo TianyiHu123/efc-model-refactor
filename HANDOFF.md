@@ -149,3 +149,40 @@ Verdict was NEEDS_CHANGES; the two MAJOR items and four MINORs were fixed:
 - Remaining: monitor to terminal, then `seff`/`sacct` efficiency review +
   resource-allocation recommendation + update example script walltime/cpus; then
   audit outputs (NetCDF dims/finite, feature rows, provenance).
+
+## Documentation: feature/output definitions + key-feature selection (2026-10-12)
+
+- **README §8a/§8b/§8c added** (docs only; no engine code changed, nothing run).
+  - **§8a Feature definitions** — every model input defined from `elm/features.py`
+    and `elm/surface.py`: trailing windows (W=7/M=30/Y=365 d, current day
+    excluded, 365-day warmup); instantaneous `SM`, `ST` (K→°C), `NPP_daily`;
+    drydown `SM_A/tau/theta_res_*_esm`; temperature `A_*_HT/LT/T`, `CV_*_T`;
+    static `sand`/`clay`/`soil c (%)`/`soil n (%)`/`c/n`, with formulas + units.
+  - **§8b Predicted variables** — the 8 EFC outcomes from `manifest.json`, their
+    NetCDF prefixes, and the 5 summary stats (`mean/median/sd/q025/q975`) on
+    `(time, soil_layer)` plus optional 500-member `bootstrap` dim.
+  - **§8c Key features for plotting** — selection derived **from the manifest
+    only** (no importance analysis run). Models are already feature-selected
+    (`feature_source = selected15_cumulative70_features.json`); each bundle's
+    `features` list IS that outcome's retained set. Ranked by cross-outcome
+    **usage frequency**:
+    - Primary: `soil c (%)` (8/8), `c/n` (6/8), `A_Y_T` (4/8).
+    - Secondary: `NPP_daily`, `SM_tau_Y_esm`, `clay` (3/8); `SM`, `SM_A_Y_esm`,
+      `SM_theta_res_Y_esm`, `sand`, `SM_theta_res_M_esm` (2/8).
+    - Retained dynamic features are overwhelmingly the annual (`Y`) window.
+    - Exact per-outcome feature sets tabulated for the plotting package.
+
+- **Explicitly flagged as NOT concludable from this repo's code** (for the
+  future plotting package):
+  1. **Physical units of the 8 predicted outcomes** — engine is unit-agnostic;
+     units come from the training data / source publication (AOGS_EFC
+     Submission3), not the code. Axis labels need confirmation from that source.
+  2. **True per-feature importance ranking/scores** — only selected feature
+     *names* survive in the manifest; importance scores are not stored in the
+     repo. The §8c ranking is a usage-frequency proxy, not the original training
+     importances. A real ranking would require re-running importance analysis on
+     the loaded forests (not done, per user instruction).
+
+- **Next step (plotting package):** can rely on §8c for which features to
+  surface and §8b for which outputs to render, but must obtain target units from
+  the training source before labeling value axes.

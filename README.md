@@ -247,6 +247,176 @@ Drydown + temperature metrics are **ported into `elm/features.py`** (from
 
 ---
 
+## 8a. Feature definitions (model inputs)
+
+All features are computed **per soil layer, per prediction day** in
+`elm/features.py` (dynamic/hydrothermal) and `elm/surface.py` (static soil
+properties). Dynamic features use three **trailing windows** that *exclude the
+current day*; the engine requires a 365-day warmup before the first prediction.
+
+| Window label | Trailing length | Rolling smoothing (temperature) |
+|--------------|-----------------|---------------------------------|
+| `W` | 7 days | 1 day (no smoothing) |
+| `M` | 30 days | 7-day centered mean |
+| `Y` | 365 days | 7-day centered mean |
+
+Below, `*` is a placeholder for the window label (`W` / `M` / `Y`).
+
+### Instantaneous (current-day) hydrothermal
+| Feature | Definition | Units |
+|---------|------------|-------|
+| `SM` | Daily-mean soil moisture (volumetric) at the current day | mm3/mm3 |
+| `ST` | Daily-mean soil temperature at the current day (K→°C) | °C |
+| `NPP_daily` | Daily-mean net primary productivity flux (site-level, repeated per layer) | gC/m^2/s |
+
+### Soil-moisture drydown metrics (`drydown_metrics`, per window)
+Computed from the trailing soil-moisture series by detecting monotonically
+**decreasing** sub-sequences (length ≥ 3) with a 5%-of-range tolerance.
+| Feature | Definition | Units |
+|---------|------------|-------|
+| `SM_A_*_esm` | Mean of the **minima** of the detected drydown sequences (asymptotic/residual moisture level, `A`). If no sequence is found, falls back to the window mean. | mm3/mm3 |
+| `SM_tau_*_esm` | Mean **length** (in days) of the detected drydown sequences (drydown timescale, `tau`). 0 if none found. | days |
+| `SM_theta_res_*_esm` | Mean **amplitude** (max − min) of the detected drydown sequences (drawdown magnitude, `theta_res`). 0 if none found. | mm3/mm3 |
+
+### Soil-temperature metrics (`temperature_metrics`, per window)
+Computed on the trailing temperature series converted to °C. `HT`/`LT` use a
+rolling-window centered mean (see table above); `T`/`CV` use the raw °C series.
+| Feature | Definition | Units |
+|---------|------------|-------|
+| `A_*_HT` | Max of the rolling-mean temperature over the window (high-temperature extreme) | °C |
+| `A_*_LT` | Min of the rolling-mean temperature over the window (low-temperature extreme) | °C |
+| `A_*_T` | Mean temperature over the window | °C |
+| `CV_*_T` | Coefficient of variation of temperature over the window (`scipy.stats.variation`) | dimensionless |
+
+### Static soil properties (per layer; constant in time)
+| Feature | Source | Definition | Units |
+|---------|--------|------------|-------|
+| `sand` | surfdata `PCT_SAND` | Sand fraction (deepest value carried into bedrock `levgrnd` nodes) | % |
+| `clay` | surfdata `PCT_CLAY` | Clay fraction (deepest value carried forward) | % |
+| `soil c (%)` | NEON csv `carbonTot` | Soil carbon mass percent = `carbonTot / 10` | % |
+| `soil n (%)` | NEON csv `nitrogenTot` | Soil nitrogen mass percent = `nitrogenTot / 10` | % |
+| `c/n` | NEON csv | Carbon-to-nitrogen ratio = `carbonTot / nitrogenTot` | dimensionless |
+
+The full engineered table (long form) therefore has, per layer per day: the 3
+instantaneous columns, 7 window metrics × 3 windows = 21 dynamic columns, and 5
+static columns, plus identifiers (`site`, `Date`, `soil_layer`,
+`soil_node_depth_cm`) and `history_start` / `history_end`.
+
+---
+
+## 8b. Predicted variables (model outputs)
+
+The ensemble predicts **8 EFC (extracellular enzyme / functional capacity)
+outcomes**, each a cumulative enzyme-activity class. The 8 outcomes come from
+`manifest.json`; each is written to the per-case NetCDF under a slugged name
+(outcome lowercased, spaces → `_`).
+
+| Outcome (manifest) | NetCDF variable prefix | Enzyme / functional group |
+|--------------------|------------------------|---------------------------|
+| Carbohydrate | `carbohydrate` | Carbohydrate (C-acquisition) degrading capacity |
+| Lignin | `lignin` | Lignin / oxidative (recalcitrant-C) degrading capacity |
+| Organic N | `organic_n` | Organic-nitrogen acquisition capacity |
+| MonomerN | `monomern` | Nitrogen-monomer acquisition capacity |
+| Inorganic N | `inorganic_n` | Inorganic-nitrogen acquisition capacity |
+| Organic P | `organic_p` | Organic-phosphorus acquisition capacity |
+| Monomer P | `monomer_p` | Phosphorus-monomer acquisition capacity |
+| Inorganic P | `inorganic_p` | Inorganic-phosphorus acquisition capacity |
+
+Each outcome is predicted by **500 bootstrap RandomForest members**. The NetCDF
+stores, per outcome, 5 summary statistics across the 500 members, each on the
+`(time, soil_layer)` grid:
+
+| NetCDF variable | Statistic across the 500 bootstrap members |
+|-----------------|----------------------------------------------|
+| `<prefix>_mean` | Ensemble mean |
+| `<prefix>_median` | Ensemble median |
+| `<prefix>_sd` | Ensemble standard deviation (ddof=1) |
+| `<prefix>_q025` | 2.5th percentile (lower 95% bound) |
+| `<prefix>_q975` | 97.5th percentile (upper 95% bound) |
+
+Optionally (with `--keep-bootstraps`) a full `<prefix>_bootstrap` variable on
+`(time, soil_layer, bootstrap)` retains all 500 members.
+
+> **Units of the outcomes:** the engine is unit-agnostic for the targets — it
+> reproduces whatever the trained models output (the training target scale from
+> `enzyme_meta_data_with_hydrothermal_11.csv`). The physical units of the
+> predicted enzyme-activity values **cannot be concluded from this repo's
+> code**; they are defined by the training dataset / source publication
+> (AOGS_EFC Submission3), not by the engine. Flagging this so a plotting package
+> can label axes correctly once the target units are confirmed.
+
+---
+
+## 8c. Key features for plotting (derived from the model contract)
+
+**Source of truth:** the models are *already* feature-selected. The manifest's
+`feature_source` is `selected15_cumulative70_features.json` ("cumulative70" =
+the top predictors explaining a cumulative ~70% of RandomForest importance from
+the training-time importance/robustness analysis). Each bundle's `features` list
+in `manifest.json` **is** that outcome's retained important-feature set — so the
+union below is the complete set of model-relevant inputs; everything else in the
+Stage-1 table is unused by the models.
+
+> **Scope note:** the per-feature importance *ranking/scores* were computed
+> during training and are **not** stored in this repo (only the selected names
+> survive in the manifest). A true per-feature importance ranking **cannot be
+> concluded from this repo's code** without re-running an importance analysis on
+> the loaded forests. The ranking below is by **cross-outcome usage frequency**
+> (how many of the 8 models retained the feature), which is a defensible proxy
+> for "generally important" and is fully derivable from the manifest.
+
+### Feature usage across the 8 outcomes (from `manifest.json`)
+
+| Feature | # outcomes using it (of 8) | Outcomes |
+|---------|:--:|---------|
+| `soil c (%)` | **8** | all |
+| `c/n` | **6** | Lignin, MonomerN, Inorganic N, Organic P, Monomer P, Inorganic P |
+| `A_Y_T` | **4** | Lignin, MonomerN, Inorganic N, Monomer P |
+| `SM_tau_Y_esm` | 3 | Lignin, Inorganic N, Inorganic P |
+| `NPP_daily` | 3 | Carbohydrate, MonomerN, Organic P |
+| `clay` | 3 | Organic N, Inorganic N, Monomer P |
+| `SM_theta_res_Y_esm` | 2 | Lignin, Organic P |
+| `sand` | 2 | Organic P, Inorganic P |
+| `SM_A_Y_esm` | 2 | Carbohydrate, Inorganic N |
+| `SM` | 2 | MonomerN, Inorganic N |
+| `SM_theta_res_M_esm` | 2 | Organic N, MonomerN |
+| `SM_theta_res_W_esm` | 1 | Organic N |
+| `SM_tau_W_esm` | 1 | Monomer P |
+| `CV_Y_T` | 1 | Inorganic P |
+
+### Recommended key features to plot
+
+- **Primary (dominant, used by most/all models):**
+  `soil c (%)` (8/8), `c/n` (6/8), `A_Y_T` (4/8). These three are the backbone
+  predictors across the enzyme classes — a soil-chemistry pair plus the annual
+  mean soil temperature.
+- **Secondary (recurring hydrothermal/texture drivers):**
+  `NPP_daily`, `SM_tau_Y_esm`, `clay`, `SM`, `SM_A_Y_esm`,
+  `SM_theta_res_Y_esm`, `sand`. These capture productivity, annual soil-moisture
+  drydown behavior, and texture.
+- **Observation on window scale:** the retained dynamic features are
+  overwhelmingly the **annual (`Y`) window** (drydown `SM_*_Y_esm`, temperature
+  `A_Y_T` / `CV_Y_T`), with only `SM_theta_res_M/W` and `SM_tau_W` from shorter
+  windows. For plotting, the annual-window metrics are the most model-relevant.
+
+### Per-outcome feature sets (exact model inputs)
+
+| Outcome | Features (trained order) |
+|---------|--------------------------|
+| Carbohydrate | `soil c (%)`, `SM_A_Y_esm`, `NPP_daily` |
+| Lignin | `SM_theta_res_Y_esm`, `A_Y_T`, `c/n`, `SM_tau_Y_esm`, `soil c (%)` |
+| Organic N | `ST`, `clay`, `soil c (%)`, `SM_theta_res_M_esm`, `SM_theta_res_W_esm` |
+| MonomerN | `A_Y_T`, `SM`, `SM_theta_res_M_esm`, `SM_theta_res_Y_esm`, `NPP_daily`, `c/n`, `soil c (%)` |
+| Inorganic N | `soil c (%)`, `A_Y_T`, `SM_A_Y_esm`, `c/n`, `SM`, `SM_tau_Y_esm`, `clay` |
+| Organic P | `SM_theta_res_Y_esm`, `sand`, `c/n`, `NPP_daily`, `soil c (%)` |
+| Monomer P | `A_Y_T`, `SM_tau_W_esm`, `clay`, `c/n`, `soil c (%)` |
+| Inorganic P | `c/n`, `sand`, `CV_Y_T`, `soil c (%)`, `SM_tau_Y_esm` |
+
+> Note: `ST` (current-day soil temperature) appears only for **Organic N**;
+> it is the one instantaneous temperature feature retained by any model.
+
+---
+
 ## 9. Layout (repo)
 
 ```
