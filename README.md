@@ -74,7 +74,7 @@ run_efc.py --site ABBY \
            --mode test \                 # test | operational  (see §6)
            --use-vertsoilc true \        # default true (see §5)
            --stage all \                 # inputs | predict | all
-           --jobs 32                     # RandomForest threads for Stage-2 predict
+           --jobs 2                      # Stage-2 predict parallelism (see §6b)
 ```
 
 - `--run-dir` is **explicit** (the compset suffix in the folder name is not
@@ -170,25 +170,40 @@ This rule is also recorded in `AGENTS.md` for agent sessions.
 ## 6b. Compute & Slurm (operational runs)
 
 **Operational runs go through Slurm, not the login node.** Stage 2 (prediction)
-is CPU-bound: on the verified ABBY case it is ~17.5 of the ~19 min total wall
-time (8 outcomes × 500-tree ensembles × 15 layers × 2190 days). Stage 1 is
-~1.4 min / ~0.1 GB; the full run peaks at ~2.5 GB RAM.
+dominates wall time: on the verified ABBY case the full run is ~19 min (Stage 1
+~1.4 min / ~0.1 GB; whole run peaks at ~4.6 GB RAM).
 
-- **`--jobs N`** sets the RandomForest thread count for Stage-2 predict (a
-  runtime `n_jobs` override on the loaded estimators). It is numerically
-  equivalent to the serial result — verified max abs diff 3.5e-18 (~1 float64
-  ULP), from parallel mean-summation order only — and gives near-linear speedup
-  on dedicated cores. Match `--jobs` to the cores Slurm allocates.
+Measured from the first operational run (ABBY_ctrlvertsoc, job 59704245,
+`seff`): **the workload is effectively near-serial** — ~137% CPU (~1.4 cores
+busy on average), ~19 min wall regardless of cores allocated. `--jobs` applies
+joblib thread parallelism across the 500 bootstrap members, but scikit-learn RF
+`.predict` on these small inputs holds the GIL enough that threads barely
+engage. **This is a performance limitation, not a correctness issue** — results
+are numerically identical to serial (verified max abs diff 0.00e+00).
+
+Practical guidance:
+
+- **Do not over-allocate cores.** More cores do not reduce wall time here and
+  only increase the `shared` charge and backfill wait. Recommended operational
+  resources (the example-script defaults): **`--cpus-per-task=4`** (2 physical
+  cores), **`--mem=8GB`** (observed ~4.6 GB), **`--time=00:40:00`** (observed
+  ~19 min). `--jobs` is set to the physical-core count (2).
+- **Pin BLAS/OpenMP to 1 thread** in the job (the example script exports
+  `OMP_NUM_THREADS=1` etc.) to avoid nested oversubscription.
 - Example single-case submission script:
   [`slurm/run_efc_single_case.slurm`](slurm/run_efc_single_case.slurm) —
-  Perlmutter CPU, `--qos=shared`, `--account=m4803`, `--cpus-per-task=32`,
-  `--mode operational`, `--jobs=$SLURM_CPUS_PER_TASK`. Case is overridable via
-  `SITE` / `CASE_NAME` / `CONFIG` / `RUN_DIR` environment variables.
+  Perlmutter CPU, `--qos=shared`, `--account=m4803`, `--cpus-per-task=4`,
+  `--mem=8GB`, `--time=00:40:00`, `--mode operational`. Submit from a
+  pre-created attempt dir (see §6); case overridable via `SITE` / `CASE_NAME` /
+  `CONFIG` / `RUN_DIR` env vars.
 - One case per job. For many sites, wrap this in a Slurm **job array** (not
   included yet).
 
-> Note: do not benchmark `--jobs > 1` on a login node — the shared 2-core login
-> node oversubscribes and runs *slower*; real speedup requires compute cores.
+> **Known limitation / future work:** real speedup needs **process-based**
+> parallelism across the 15 layers and/or 8 outcomes (loky backend), not threads
+> across 500 tiny predicts. Until then, treat each case as ~20 min near-serial.
+> Also: `shared`-queue waits were 1–6 h during testing and `squeue --start`
+> estimates were unreliable — plan batches accordingly.
 
 ---
 

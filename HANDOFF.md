@@ -72,6 +72,12 @@ Verdict was NEEDS_CHANGES; the two MAJOR items and four MINORs were fixed:
 
 ## Parallelization & Slurm (added 2026-10-11)
 
+> **Superseded by the 2026-10-12 operational run below.** The `--jobs` approach
+> and resources here were revised: the per-model `n_jobs` override was replaced
+> by across-model threading, and example resources are now
+> `--cpus-per-task=4` / `--mem=8GB` / `--time=00:40:00`. The workload turned out
+> to be effectively near-serial. Kept for history.
+
 - `run_efc.py --jobs N` sets the RandomForest thread count for Stage-2 predict
   (runtime `n_jobs` override on loaded estimators). Verified numerically
   equivalent to serial (max abs diff 3.5e-18 ≈ 1 float64 ULP, from parallel
