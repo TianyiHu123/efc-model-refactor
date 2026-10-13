@@ -14,11 +14,17 @@ retained in `clm_ref/` **for reference only** and is not maintained.
 
 | Component | State |
 |-----------|-------|
-| Stage 2 — prediction (`predict_with_saved_cumulative70_models.py`) | **Ready** (to be wrapped by the engine) |
+| ELM engine (`elm/`) + root caller (`run_efc.py`) | **Built & smoke-tested** (ABBY) |
+| Stage 1 — inputs (`elm/build.py` + `io`/`surface`/`features`) | **Done** |
+| Stage 2 — prediction (`elm/predict.py`, wraps the saved bundles) | **Done** |
+| Plotting (`elm/plotting.py`) | **Done** (reviewed + smoke-tested) |
+| Operational Slurm run (`slurm/run_efc_single_case.slurm`) | **Verified** (ABBY) |
 | Model artifacts (`model_artifacts/cumulative70_bootstrap500/`) | **Ready** (8 bundles + manifest) |
 | CLM reference code (`clm_ref/`) | **Frozen** — do not edit |
-| ELM engine (`elm/`) + root caller (`run_efc.py`) | **Plan finalized; scaffolding next** |
-| README / AGENTS / HANDOFF + git tracking | **Current** |
+
+The original `predict_with_saved_cumulative70_models.py` is retained as the
+Stage-2 contract reference; the engine's `elm/predict.py` is the maintained path.
+See `HANDOFF.md` for the current-state pointer (done / active / next).
 
 ---
 
@@ -477,15 +483,15 @@ emit figures alongside the scientific outputs.
 
 ```
 efc-model-refactor/
-  run_efc.py                   # root caller (CLI) — to build
-  elm/                         # engine package — to build
+  run_efc.py                   # root caller (CLI)
+  elm/                         # engine package
     io.py config.py surface.py features.py build.py predict.py plotting.py paths.py
-  predict_with_saved_cumulative70_models.py   # existing Stage-2 (to be wrapped)
+  predict_with_saved_cumulative70_models.py   # Stage-2 contract reference (not maintained)
   model_artifacts/             # 8 bundles (git-ignored) + manifest.json (tracked)
   slurm/                       # example Slurm submission scripts (single case)
   clm_ref/                     # frozen CLM reference (do not edit)
   AGENTS.md                    # agent operating rules (run-location policy, env)
-  HANDOFF.md                   # current state + decisions for session handoff
+  HANDOFF.md                   # current-state pointer (done / active / next)
   outputs/                     # git-ignored placeholder (real outputs go to efc-prediction)
 ```
 
