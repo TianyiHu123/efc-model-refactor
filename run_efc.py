@@ -31,6 +31,7 @@ from pathlib import Path
 
 from elm import build as _build
 from elm import io as _io
+from elm import plotting as _plotting
 from elm import predict as _predict
 from elm import surface as _surface
 from elm.config import load_case_config
@@ -75,11 +76,44 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help="threads per RandomForest for Stage-2 predict (parallelism); "
                         "use the number of allocated cores on a compute node")
     p.add_argument("--no-csv", action="store_true", help="skip CSV copy of the table")
+    p.add_argument("--plot", action="store_true",
+                   help="after the run, render PNG figures (EFC predictions + "
+                        "driver features) into {output-dir}/plots")
+    p.add_argument("--plot-only", action="store_true",
+                   help="skip Stage 1/2; only render figures from existing "
+                        "outputs in --output-dir (requires --output-dir).")
+    p.add_argument("--plot-vars", default="all",
+                   help="which EFC outcomes to plot: 'all' (default) or a "
+                        "comma-separated list of outcome names/slugs "
+                        "(e.g. 'lignin,carbohydrate').")
+    p.add_argument("--plot-dir", type=Path, default=None,
+                   help="destination root for figures (default {output-dir}/plots).")
     return p.parse_args(argv)
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+
+    # --- plot-only: skip Stage 1/2; render from existing products ---
+    if args.plot_only:
+        if args.output_dir is None:
+            print("[error] --plot-only requires --output-dir pointing at an "
+                  "attempt folder with existing outputs.", file=sys.stderr)
+            return 2
+        src_dir = args.output_dir.expanduser().resolve()
+        if not src_dir.is_dir():
+            print(f"[error] --output-dir not found: {src_dir}", file=sys.stderr)
+            return 2
+        plot_dir = (args.plot_dir.expanduser().resolve()
+                    if args.plot_dir is not None else src_dir / "plots")
+        print(f"[info] plot-only: reading {src_dir}; writing figures to {plot_dir}")
+        summary = _plotting.generate_plots(
+            out_dir=src_dir, case_name=args.case_name, model_dir=MODEL_DIR,
+            plot_dir=plot_dir, plot_vars=args.plot_vars,
+        )
+        n = sum(len(v) for v in summary.values())
+        print(f"[done] plot-only: {n} figure(s) across {len(summary)} outcome(s)")
+        return 0
 
     cfg = load_case_config(args.config)
     # Consistency checks between CLI and cfg (warn-level; cfg wins for data,
@@ -123,6 +157,9 @@ def main(argv=None) -> int:
     print(f"[info] wrote: {written} ; provenance: {prov_path}")
 
     if args.stage == "inputs":
+        if args.plot:
+            print("[warn] --plot ignored with --stage inputs (no predictions "
+                  "produced to plot).", file=sys.stderr)
         print("[done] stage=inputs")
         return 0
 
@@ -132,6 +169,18 @@ def main(argv=None) -> int:
         keep_bootstraps=args.keep_bootstraps, n_jobs=args.jobs,
     )
     print(f"[info] wrote predictions: {nc_path}")
+
+    if args.plot:
+        plot_dir = (args.plot_dir.expanduser().resolve()
+                    if args.plot_dir is not None else out_dir / "plots")
+        print(f"[info] rendering figures to {plot_dir}")
+        summary = _plotting.generate_plots(
+            out_dir=out_dir, case_name=args.case_name, model_dir=MODEL_DIR,
+            plot_dir=plot_dir, plot_vars=args.plot_vars,
+        )
+        n = sum(len(v) for v in summary.values())
+        print(f"[info] plots: {n} figure(s) across {len(summary)} outcome(s)")
+
     print("[done] stage=all" if args.stage == "all" else "[done] stage=predict")
     return 0
 

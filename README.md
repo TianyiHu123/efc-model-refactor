@@ -58,6 +58,7 @@ run_efc.py                 # CLI entry point; parses arguments, drives the engin
         features.py        #   trailing 7/30/365-day metrics (drydown + temperature), all layers
         build.py           #   nc + cfg + surfdata + csv -> consolidated per-case feature table
         predict.py         #   apply the 8 bootstrap bundles -> per-case NetCDF predictions
+        plotting.py        #   render PNG figures (EFC predictions + driver features)
         paths.py           #   resolve/create run-location dirs (see §6)
 ```
 
@@ -417,13 +418,68 @@ Stage-1 table is unused by the models.
 
 ---
 
+## 8d. Plotting (`elm/plotting.py`)
+
+Renders PNG figures from a case's Stage-1/Stage-2 products
+(`{case}_EFC_predictions.nc` + `{case}_features.parquet`, CSV fallback). Uses
+the existing env (matplotlib, headless `Agg`), DPI 150, no new dependencies.
+
+**Output layout — one self-contained folder per EFC outcome:**
+
+```
+{plot-dir}/{outcome_slug}/
+  {outcome}_prediction_15layer.png   # EFC: 15 panels (one per layer), mean +
+                                      # median (dashed) + q025-q975 shaded band
+  <that outcome's driver features>    # from manifest.json features[]; shared
+                                      # features are re-plotted in each folder
+```
+
+**Driver-feature figures** are dispatched by how the column varies in the
+feature table (detected programmatically, not hardcoded):
+
+| Feature kind | Example features | Figure |
+|--------------|------------------|--------|
+| static, depth-varying | `soil c (%)`, `c/n`, `sand`, `clay` | `*_profile.png` — value vs depth (log-depth, surface on top) |
+| dynamic, per-layer | `A_Y_T`, `SM`, `ST`, `SM_*_esm`, `CV_Y_T` | `*_15layer.png` — 15-panel timeseries |
+| dynamic, site-level | `NPP_daily` (identical across layers) | `*_timeseries.png` — single timeseries |
+
+- EFC y-axes are labeled **"unitless (placeholder)"** (target units unknown from
+  repo code; see §8b). Driver-feature axes use the units in §8a.
+- Feature units/labels follow §8a; feature→folder membership follows the
+  per-outcome sets in §8c.
+
+### CLI
+
+Plotting is driven through `run_efc.py`:
+
+| Flag | Effect |
+|------|--------|
+| `--plot` | after Stage 2, render into `{output-dir}/plots` (no-op + warning under `--stage inputs`) |
+| `--plot-only` | skip Stage 1/2; render from existing products in `--output-dir` (required) |
+| `--plot-vars` | `all` (default) or comma list of outcome names/slugs, e.g. `lignin,carbohydrate` |
+| `--plot-dir` | destination root (default `{output-dir}/plots`) |
+
+```bash
+# plot one outcome from an existing operational attempt (no recompute)
+run_efc.py --plot-only \
+  --site ABBY --case-name ABBY_ctrlvertsoc \
+  --output-dir .../ABBY/ABBY_ctrlvertsoc/operational/attempt2 \
+  --plot-dir   .../ABBY/ABBY_ctrlvertsoc/plot \
+  --plot-vars  lignin
+```
+
+`--plot` is included in `slurm/run_efc_single_case.slurm`, so operational runs
+emit figures alongside the scientific outputs.
+
+---
+
 ## 9. Layout (repo)
 
 ```
 efc-model-refactor/
   run_efc.py                   # root caller (CLI) — to build
   elm/                         # engine package — to build
-    io.py config.py surface.py features.py build.py predict.py paths.py
+    io.py config.py surface.py features.py build.py predict.py plotting.py paths.py
   predict_with_saved_cumulative70_models.py   # existing Stage-2 (to be wrapped)
   model_artifacts/             # 8 bundles (git-ignored) + manifest.json (tracked)
   slurm/                       # example Slurm submission scripts (single case)

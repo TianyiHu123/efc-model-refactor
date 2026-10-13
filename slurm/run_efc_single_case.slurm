@@ -78,7 +78,8 @@ cd "${REPO_ROOT}"
   --mode operational \
   --use-vertsoilc true \
   --stage all \
-  --jobs "${JOBS}"
+  --jobs "${JOBS}" \
+  --plot
 
 echo "[slurm] done."
 
